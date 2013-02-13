@@ -56,9 +56,7 @@ trait SingletonTypeMacros extends Macro {
 }
 
 object SNat {
-  def apply(i: Int): Any = macro SNatMacros.toSNat
-
-  implicit def intToNat[N](i: Int) : SNat[N] = macro SNatMacros.toSNat
+  implicit def apply[N](i: Int) : SNat[N] = macro SNatMacros.toSNat
 
   implicit def natToInt[N](snat: SNat[N]): Int = snat.value
 }
