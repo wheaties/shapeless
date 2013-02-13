@@ -25,7 +25,7 @@ class SNat[N](val value: Int) extends AnyVal {
 }
 
 object SingletonTypes {
-  type Singleton[T](t: T) = macro SingletonTypeMacros.singletonType[T]
+  type ^[T](t: T) = macro SingletonTypeMacros.singletonType[T]
 
   case class Box[T](value: T)
 
