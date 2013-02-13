@@ -45,6 +45,7 @@ abstract class SSized[+Repr, L](r : Repr) {
  * @author Miles Sabin
  */
 class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
+  import SingletonTypes._
   import SSized._
   import SNat._
   import SLt._

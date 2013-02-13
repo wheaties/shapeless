@@ -24,43 +24,41 @@ class SNat[N](val value: Int) extends AnyVal {
   override def toString = "SNat[Int("+value+")]("+value+")"
 }
 
+object SingletonTypes {
+  type SInt(i: Int) = macro SingletonTypeMacros.intSingletonType
+
+  type SBool(b: Boolean) = macro SingletonTypeMacros.booleanSingletonType
+}
+
+trait SingletonTypeMacros extends Macro {
+  import c.universe._
+
+  def eval[A](t: c.Tree) = c.eval(c.Expr[A](c.resetAllAttrs(t.duplicate)))
+
+  def intSingletonType(i: c.Expr[Int]) =
+    TypeTree(ConstantType(Constant(
+      eval[Int](i.tree)
+    )))
+  
+  def booleanSingletonType(b: c.Expr[Boolean]) =
+    TypeTree(ConstantType(Constant(
+      eval[Boolean](b.tree)
+    )))
+}
+
 object SNat {
   def apply(i: Int): Any = macro SNatMacros.toSNat
 
   implicit def intToNat[N](i: Int) : SNat[N] = macro SNatMacros.toSNat
 
   implicit def natToInt[N](snat: SNat[N]): Int = snat.value
-
-  type SInt(i: Int) = macro intSingletonType
-
-  type SBool(b: Boolean) = macro booleanSingletonType
-
-  def eval[A](c: Context)(t: c.Tree) = c.eval(c.Expr[A](c.resetAllAttrs(t.duplicate)))
-
-  def intSingletonType(c: Context)(i: c.Expr[Int]) = {
-    import c.universe._
-
-    TypeTree(ConstantType(Constant(
-      eval[Int](c)(i.tree)
-    )))
-  }
-  
-  def booleanSingletonType(c: Context)(b: c.Expr[Boolean]) = {
-    import c.universe._
-
-    TypeTree(ConstantType(Constant(
-      eval[Boolean](c)(b.tree)
-    )))
-  }
 }
 
-trait SNatMacros extends Macro {
+trait SNatMacros extends Macro with SingletonTypeMacros {
   import c.universe._
 
-  import SNat.eval
-
   def toSNat(i: c.Expr[Int]) = {
-    val n = eval[Int](c)(i.tree)
+    val n = eval[Int](i.tree)
     val N = TypeTree(ConstantType(Constant(n)))
     c.Expr(q"new SNat[$N]($n)")
   }
@@ -70,7 +68,7 @@ trait SNatMacros extends Macro {
 
     tic.tree match {
       case Apply(_, List(arg)) =>
-        val n = eval[Int](c)(arg)
+        val n = eval[Int](arg)
         tic.infer(N, ConstantType(Constant(n)))
 
       case _ =>
