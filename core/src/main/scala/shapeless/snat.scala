@@ -26,6 +26,12 @@ class SNat[N](val value: Int) extends AnyVal {
 
 object SingletonTypes {
   type Singleton[T](t: T) = macro SingletonTypeMacros.singletonType[T]
+
+  case class Box[T](value: T)
+
+  implicit def witnessBox[T]: Box[T] = macro SingletonTypeMacros.witnessBox[T]
+
+  def singleton[T](implicit box: Box[T]): T = box.value
 }
 
 trait SingletonTypeMacros extends Macro {
@@ -37,6 +43,16 @@ trait SingletonTypeMacros extends Macro {
     TypeTree(ConstantType(Constant(
       eval[T](t.tree)
     )))
+
+  def witnessBox[T: c.WeakTypeTag] = {
+    weakTypeOf[T] match {
+      case t @ ConstantType(Constant(s)) =>
+        val T = TypeTree(t)
+        val l = Literal(Constant(s))
+        c.Expr[T](q"new Box[$T]($l)")
+      case _ => c.abort(c.enclosingPosition, "Type argument must be a singleton type")
+    }
+  }
 }
 
 object SNat {
