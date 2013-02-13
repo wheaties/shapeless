@@ -54,13 +54,13 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
    * Returns the head of this collection. Available only if there is evidence that this collection has at least one
    * element.
    */
-  def head(implicit ev : SLt[SInt(0), L, SBool(true)]) : A = r.head
+  def head(implicit ev : SLt[Singleton(0), L, Singleton(true)]) : A = r.head
   
   /**
    * Returns the tail of this collection. Available only if there is evidence that this collection has at least one
    * element.
    */
-  def tail[M](implicit pred : SDiff[L, SInt(1), M]) = wrap[A, Repr, M](r.tail)
+  def tail[M](implicit pred : SDiff[L, Singleton(1), M]) = wrap[A, Repr, M](r.tail)
   
   /**
    * Returns the first ''m'' elements of this collection. Available only if there is evidence that this collection has
@@ -86,7 +86,7 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
    * Prepend the argument element to this collection. The resulting collection will be statically known to have a size
    * one greater than this collection.
    */
-  def +:[S](elem : A)(implicit succ: SSum[L, SInt(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
+  def +:[S](elem : A)(implicit succ: SSum[L, Singleton(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
     val builder = cbf.apply(r)
     builder += elem
     builder ++= r.toIterator
@@ -97,7 +97,7 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
    * Append the argument element to this collection. The resulting collection will be statically known to have a size
    * one greater than this collection.
    */
-  def :+[S](elem : A)(implicit succ: SSum[L, SInt(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
+  def :+[S](elem : A)(implicit succ: SSum[L, Singleton(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
     val builder = cbf.apply(r)
     builder ++= r.toIterator
     builder += elem

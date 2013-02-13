@@ -25,24 +25,17 @@ class SNat[N](val value: Int) extends AnyVal {
 }
 
 object SingletonTypes {
-  type SInt(i: Int) = macro SingletonTypeMacros.intSingletonType
-
-  type SBool(b: Boolean) = macro SingletonTypeMacros.booleanSingletonType
+  type Singleton[T](t: T) = macro SingletonTypeMacros.singletonType[T]
 }
 
 trait SingletonTypeMacros extends Macro {
   import c.universe._
 
-  def eval[A](t: c.Tree) = c.eval(c.Expr[A](c.resetAllAttrs(t.duplicate)))
+  def eval[T](t: c.Tree) = c.eval(c.Expr[T](c.resetAllAttrs(t.duplicate)))
 
-  def intSingletonType(i: c.Expr[Int]) =
+  def singletonType[T](t: c.Expr[T]) =
     TypeTree(ConstantType(Constant(
-      eval[Int](i.tree)
-    )))
-  
-  def booleanSingletonType(b: c.Expr[Boolean]) =
-    TypeTree(ConstantType(Constant(
-      eval[Boolean](b.tree)
+      eval[T](t.tree)
     )))
 }
 
