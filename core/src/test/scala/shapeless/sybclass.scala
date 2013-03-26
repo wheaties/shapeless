@@ -229,6 +229,7 @@ class SybClassTests {
   case class Address(street : String, city : String, postcode : String)
   case class Person(name : String, age : Int, address : Address)
   
+  /*
   @Test
   def testHListIso2 {
     
@@ -240,4 +241,5 @@ class SybClassTests {
     val s1 = everything(gsize)(plus)(p1)
     assertEquals(42, s1)
   }
+  */
 }
