@@ -22,7 +22,7 @@ shapeless in particular.
 Selected highlights of shapeless
 --------------------------------
 
-(All the examples below assume you have previously imported shapeless._)
+(All the examples below assume you have previously imported shapeless.\_)
 
 ### Polymorphic function values
 
@@ -304,7 +304,7 @@ applications including,
     // Given an isomorphism between `C` and an `HList` `L`, construct a
     // monoid instance for `C` given the monoid instance for `L`, which is 
     // in turn derived from the monoid instances for its/`C`'s element types.
-    implicit def ccMonoid[C, L <: HList](implicit iso : HListIso[C, L], ml : Monoid[L]) =
+    implicit def ccMonoid[C, L <: HList](implicit iso : Iso[C, L], ml : Monoid[L]) =
       new Monoid[C] {
         def zero = fromHList(ml.zero)
         def append(a : C, b : C) = fromHList(toHList(a) |+| toHList(b))
@@ -313,8 +313,8 @@ applications including,
     // An ordinary case class
     case class Foo(i : Int, s : String, d : Double)
   
-    // Publish its `HListIso`
-    implicit def fooIso = HListIso(Foo.apply _, Foo.unapply _)
+    // Publish its `Iso`
+    implicit def fooIso = Iso.hlist(Foo.apply _, Foo.unapply _)
   
     // And now it's a monoid ...
     
@@ -331,8 +331,8 @@ applications including,
     case class Person(name : String, age : Int, address : Address)
     
     // One line of boilerplate per case class ...
-    implicit val addressIso = HListIso(Address.apply _, Address.unapply _)
-    implicit val personIso = HListIso(Person.apply _, Person.unapply _)
+    implicit val addressIso = Iso.hlist(Address.apply _, Address.unapply _)
+    implicit val personIso = Iso.hlist(Person.apply _, Person.unapply _)
     
     // Some lenses over Person/Address ...
     val nameLens     = Lens[Person] >> _0
@@ -431,12 +431,27 @@ Using shapeless
 
 shapeless is published to the Sonatype OSS Repository Hosting Service
 (OSSRH) and will be synced to Maven Central. Release builds are published
-relative to Scala 2.9.1, 2.9.1-1, 2.9.2. Snapshot builds are also published
-relative to Scala 2.10.0-SNAPSHOT.
+relative to Scala 2.9.2 and 2.10.0. Snapshot builds are also published
+relative to Scala 2.11.0-SNAPSHOT.
 
-If your project is built with Scala 2.9.2, then to include the latest
-release of shapeless in your build add the following to your SBT
+To build with Scala 2.10.0 add the following to your SBT (0.12.0 or later)
 configuration,
+
+```scala
+scalaVersion := "2.10.0"
+
+resolvers ++= Seq(
+  "Sonatype OSS Releases" at "http://oss.sonatype.org/content/repositories/releases/",
+  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
+)
+
+libraryDependencies ++= Seq(
+  "com.chuusai" %% "shapeless" % "1.2.4"
+)
+```
+
+If your project is built with Scala 2.9.2, then you will also need to specify the
+`-Ydependent-method-types` compiler flag,
 
 ```scala
 scalaVersion := "2.9.2"
@@ -449,31 +464,12 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "com.chuusai" %% "shapeless" % "1.2.3"
+  "com.chuusai" %% "shapeless" % "1.2.4"
 )
 ```
 
-If you want to be able to build with Scala 2.10.0 milestone releases or
-snapshots then you'll need to use SBT 0.12.0-M1 or later and add the
-following to your SBT configuration,
-
-```scala
-scalaVersion := "2.10.0-SNAPSHOT"
-
-resolvers ++= Seq(
-  "Sonatype OSS Releases" at "http://oss.sonatype.org/content/repositories/releases/",
-  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
-)
-
-libraryDependencies ++= Seq(
-  "com.chuusai" % "shapeless" % "1.2.3" cross CrossVersion.full
-)
-```
-
-Note that in this case there's no need (in fact it would be an error) to add
-the `-Ydependent-method-types` compiler flag. If you want to be able to
-support building relative to both 2.9.2 and 2.10.0 then you should use the
-2.10.0 configuration above and add the following,
+If you want to be able to support building relative to both 2.9.2 and 2.10.0
+then you should use the 2.10.0 configuration above and add the following,
  
 ```scala
 scalacOptions <++= scalaVersion map { version =>
@@ -487,20 +483,28 @@ scalacOptions <++= scalaVersion map { version =>
 which will set the `-Ydependent-method-types` compiler flag conditionally on
 the actual Scala version in use.
 
+To build with Scala 2.11.0 milestone releases or snapshots then you'll need to
+add the following to your SBT configuration,
+
+```scala
+scalaVersion := "2.11.0-SNAPSHOT"
+
+resolvers ++= Seq(
+  "Sonatype OSS Releases" at "http://oss.sonatype.org/content/repositories/releases/",
+  "Sonatype OSS Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/"
+)
+
+libraryDependencies ++= Seq(
+  "com.chuusai" % "shapeless" % "1.2.4" cross CrossVersion.full
+)
+```
+
 Building shapeless
 ------------------
 
-shapeless is built using SBT. On Linux and Mac OS run the `sbt` script and
-perform the `compile` task.
-
-By default shapeless is built with Scala 2.10-SNAPSHOT, but it will build
-against any Scala 2.9.x release. You can build against Scala 2.9.2 by
-running the `sbt` script with the `-29` command line switch or by executing
-`++ 2.9.2` at the SBT prompt.
-
-Eclipse project metadata can be generated by performing the `eclipse` task
-followed by the `compile-inputs` task. If you're working with Eclipse I 
-recommend using the [nightly builds relative to Scala master](http://goo.gl/iRgyc).
+By default shapeless is built with Scala 2.11.0-SNAPSHOT, but it will build
+against any Scala 2.9.x or 2.10.x release. You can build against Scala 2.10.0 by
+running `sbt` and entering `++ 2.10.0` at the SBT prompt.
 
 Testing
 -------

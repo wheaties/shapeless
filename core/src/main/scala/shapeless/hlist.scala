@@ -16,6 +16,10 @@
 
 package shapeless
 
+import scala.annotation.tailrec
+
+import TypeOperators._  
+  
 /**
  * `HList` ADT base trait.
  * 
@@ -37,7 +41,7 @@ final case class ::[+H, +T <: HList](head : H, tail : T) extends HList {
  * 
  * @author Miles Sabin
  */
-trait HNil extends HList {
+sealed trait HNil extends HList {
   def ::[H](h : H) = shapeless.::(h, this)
   override def toString = "HNil"
 }
@@ -378,15 +382,32 @@ final class HListOps[L <: HList](l : L) {
   def unify(implicit unifier : Unifier[L]) : unifier.Out = unifier(l)
 
   /**
+   * Returns an `HList` with all elements that are subtypes of `B` typed as `B`.
+   */
+  def unifySubtypes[B](implicit subtypeUnifier : SubtypeUnifier[L, B]) : subtypeUnifier.Out = subtypeUnifier(l)
+
+  /**
    * Converts this `HList` to a correspondingly typed tuple.
    */
   def tupled(implicit tupler : Tupler[L]) : tupler.Out = tupler(l)
   
   /**
-   * Compute the length of this `Hlist`.
+   * Compute the length of this `HList`.
    */
   def length(implicit length : Length[L]) : length.Out = length()
   
+  /**
+   * Compute the length of this `HList` as a runtime Int value.
+   */
+  def runtimeLength: Int = {
+    @tailrec def loop(l: HList, acc: Int): Int = l match {
+      case HNil => acc
+      case hd :: tl => loop(tl, acc+1)
+    }
+
+    loop(l, 0)
+  }
+
   /**
    * Converts this `HList` to an ordinary `List` of elements typed as the least upper bound of the types of the elements
    * of this `HList`.
@@ -473,8 +494,6 @@ object Mapped {
 trait MappedAux[L <: HList, F[_], Out <: HList]
 
 object MappedAux {
-  import TypeOperators._
-  
   implicit def hnilMappedAux[F[_]] = new MappedAux[HNil, F, HNil] {}
   
   implicit def hlistIdMapped[L <: HList] = new MappedAux[L, Id, L] {}
@@ -504,8 +523,6 @@ object Comapped {
 trait ComappedAux[L <: HList, F[_], Out <: HList]
 
 trait LowPriorityComappedAux {
-  import TypeOperators._
-  
   implicit def hlistIdComapped[L <: HList] = new ComappedAux[L, Id, L] {}
 }
 
@@ -522,36 +539,114 @@ object ComappedAux extends LowPriorityComappedAux {
  * 
  * @author Miles Sabin
  */
-trait NatTRel[L1 <: HList, F1[_], L2 <: HList, F2[_]]
+trait NatTRel[L1 <: HList, F1[_], L2 <: HList, F2[_]] {
+  def map(nt: F1 ~> F2, fa: L1): L2
+}
 
 object NatTRel {
-  import TypeOperators._
-  
-  implicit def hnilNatTRel1[F1[_], F2[_]] = new NatTRel[HNil, F1, HNil, F2] {}
-  implicit def hnilNatTRel2[H1, F2[_]] = new NatTRel[HNil, Const[H1]#λ, HNil, F2] {}
-  implicit def hnilNatTRel3[F1[_], H2] = new NatTRel[HNil, F1, HNil, Const[H2]#λ] {}
-  implicit def hnilNatTRel4[H1, H2] = new NatTRel[HNil, Const[H1]#λ, HNil, Const[H2]#λ] {}
+  implicit def hnilNatTRel1[F1[_], F2[_]] = new NatTRel[HNil, F1, HNil, F2] {
+    def map(f: F1 ~> F2, fa: HNil): HNil = HNil
+  }
+  implicit def hnilNatTRel2[F1[_], H2] = new NatTRel[HNil, F1, HNil, Const[H2]#λ] {
+    def map(f: F1 ~> Const[H2]#λ, fa: HNil): HNil = HNil
+  }
 
   implicit def hlistNatTRel1[H, F1[_], F2[_], T1 <: HList, T2 <: HList](implicit nt : NatTRel[T1, F1, T2, F2]) =
-    new NatTRel[F1[H] :: T1, F1, F2[H] :: T2, F2] {}
+    new NatTRel[F1[H] :: T1, F1, F2[H] :: T2, F2] {
+      def map(f: F1 ~> F2, fa: F1[H] :: T1): F2[H] :: T2 = f(fa.head) :: nt.map(f, fa.tail)
+    }
 
   implicit def hlistNatTRel2[H, F2[_], T1 <: HList, T2 <: HList](implicit nt : NatTRel[T1, Id, T2, F2]) =
-    new NatTRel[H :: T1, Id, F2[H] :: T2, F2] {}
+    new NatTRel[H :: T1, Id, F2[H] :: T2, F2] {
+      def map(f: Id ~> F2, fa: H :: T1): F2[H] :: T2 = f(fa.head) :: nt.map(f, fa.tail)
+    }
+
   implicit def hlistNatTRel3[H, F1[_], T1 <: HList, T2 <: HList](implicit nt : NatTRel[T1, F1, T2, Id]) =
-    new NatTRel[F1[H] :: T1, F1, H :: T2, Id] {}
+    new NatTRel[F1[H] :: T1, F1, H :: T2, Id] {
+      def map(f: F1 ~> Id, fa: F1[H] :: T1): H :: T2 = f(fa.head) :: nt.map(f, fa.tail)
+    }
 
-  implicit def hlistNatTRel4[H1, T1 <: HList, H2, F2[_], T2 <: HList](implicit nt : NatTRel[T1, Const[H1]#λ, T2, F2]) =
-    new NatTRel[H1 :: T1, Const[H1]#λ, F2[H2] :: T2, F2] {}
-  implicit def hlistNatTRel5[H1, F1[_], T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, F1, T2, Const[H2]#λ]) =
-    new NatTRel[F1[H1] :: T1, F1, H2 :: T2, Const[H2]#λ] {}
+  implicit def hlistNatTRel4[H1, F1[_], T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, F1, T2, Const[H2]#λ]) =
+    new NatTRel[F1[H1] :: T1, F1, H2 :: T2, Const[H2]#λ] {
+      def map(f: F1 ~> Const[H2]#λ, fa: F1[H1] :: T1): H2 :: T2 = f(fa.head) :: nt.map(f, fa.tail)
+    }
 
-  implicit def hlistNatTRel6[H1, T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, Const[H1]#λ, T2, Id]) =
-    new NatTRel[H1 :: T1, Const[H1]#λ, H2 :: T2, Id] {}
-  implicit def hlistNatTRel7[H1, T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, Id, T2, Const[H2]#λ]) =
-    new NatTRel[H1 :: T1, Id, H2 :: T2, Const[H2]#λ] {}
+  implicit def hlistNatTRel5[H1, T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, Id, T2, Const[H2]#λ]) =
+    new NatTRel[H1 :: T1, Id, H2 :: T2, Const[H2]#λ] {
+      def map(f: Id ~> Const[H2]#λ, fa: H1 :: T1): H2 :: T2 = f(fa.head) :: nt.map(f, fa.tail)
+    }
+}
 
-  implicit def hlistNatTRel8[H1, T1 <: HList, H2, T2 <: HList](implicit nt : NatTRel[T1, Const[H1]#λ, T2, Const[H2]#λ]) =
-    new NatTRel[H1 :: T1, Const[H1]#λ, H2 :: T2, Const[H2]#λ] {}
+/**
+ * Type class providing minimally witnessed operations on `HList`s which can be derived from `L` by wrapping
+ * each of its elements in a type constructor.
+ */
+trait HKernel {
+  type L <: HList
+  type Mapped[G[_]] <: HList
+  type Length <: Nat
+
+  def map[F[_], G[_]](f: F ~> G, l: Mapped[F]): Mapped[G]
+
+  def tabulate[C](from: Int)(f: Int => C): Mapped[Const[C]#λ]
+
+  def toList[C](l: Mapped[Const[C]#λ]): List[C]
+
+  def length: Int
+}
+
+trait HNilHKernel extends HKernel {
+  import Nat._
+
+  type L = HNil
+  type Mapped[G[_]] = HNil
+  type Length = _0
+
+  def map[F[_], G[_]](f: F ~> G, l: HNil): HNil = HNil
+
+  def tabulate[C](from: Int)(f: Int => C): HNil = HNil
+
+  def toList[C](l: HNil): List[C] = Nil
+
+  def length: Int = 0
+}
+
+case object HNilHKernel extends HNilHKernel
+
+final case class HConsHKernel[H, T <: HKernel](tail: T) extends HKernel {
+  type L = H :: tail.L
+  type Mapped[G[_]] = G[H] :: tail.Mapped[G]
+  type Length = Succ[tail.Length]
+
+  def map[F[_], G[_]](f: F ~> G, l: F[H] :: tail.Mapped[F]): G[H] :: tail.Mapped[G] = f(l.head) :: tail.map(f, l.tail)
+
+  def tabulate[C](from: Int)(f: Int => C): C :: tail.Mapped[Const[C]#λ] = f(from) :: tail.tabulate(from+1)(f)
+
+  def toList[C](l: C :: tail.Mapped[Const[C]#λ]): List[C] = l.head :: tail.toList(l.tail)
+
+  def length: Int = 1+tail.length
+}
+
+object HKernel {
+  def apply[L <: HList](implicit mk: HKernelAux[L]): mk.Out = mk()
+  def apply[L <: HList](l: L)(implicit mk: HKernelAux[L]): mk.Out = mk()
+}
+
+trait HKernelAux[L <: HList] {
+  type Out <: HKernel
+  def apply(): Out
+}
+
+object HKernelAux {
+  implicit def mkHNilHKernel = new HKernelAux[HNil] {
+    type Out = HNilHKernel
+    def apply() = HNilHKernel
+  }
+
+  implicit def mkHListHKernel[H, T <: HList](implicit ct: HKernelAux[T]) = new HKernelAux[H :: T] {
+    type Out = HConsHKernel[H, ct.Out]
+    def apply() = HConsHKernel[H, ct.Out](ct())
+  }
 }
 
 /**
@@ -898,6 +993,46 @@ object UnifierAux {
 }
 
 /**
+ * Type class supporting unification of all elements that are subtypes of `B` in this `HList` to `B`, with all other
+ * elements left unchanged.
+ * 
+ * @author Travis Brown
+ */
+trait SubtypeUnifier[L <: HList, B] {
+  type Out
+  def apply(l : L) : Out
+}
+
+trait SubtypeUnifierAux[L <: HList, B, Out <: HList] {
+  def apply(l : L) : Out
+}
+  
+object SubtypeUnifier {
+  implicit def subtypeUnifier[L <: HList, B, Out0 <: HList](implicit subtypeUnifier : SubtypeUnifierAux[L, B, Out0]) =
+    new SubtypeUnifier[L, B] {
+      type Out = Out0
+      def apply(l : L) : Out = subtypeUnifier(l)
+    }
+}
+
+object SubtypeUnifierAux {
+  implicit def hnilSubtypeUnifier[B] = new SubtypeUnifierAux[HNil, B, HNil] {
+    def apply(l : HNil) = l
+  }
+  
+  implicit def hlistSubtypeUnifier1[H, T <: HList, B, NT <: HList]
+    (implicit st : H <:< B, subtypeUnifier : SubtypeUnifierAux[T, B, NT]) = new SubtypeUnifierAux[H :: T, B, B :: NT] {
+      def apply(l : H :: T) = st(l.head) :: subtypeUnifier(l.tail) 
+    }
+  
+  implicit def hlistSubtypeUnifier2[H, T <: HList, B, NT <: HList]
+    (implicit nst : H <:!< B, subtypeUnifier : SubtypeUnifierAux[T, B, NT]) =
+      new SubtypeUnifierAux[H :: T, B, H :: NT] {
+        def apply(l : H :: T) = l.head :: subtypeUnifier(l.tail) 
+      }
+}
+
+/**
  * Type class supporting conversion of this `HList` to an ordinary `List` with elements typed as the least upper bound
  * of the types of the elements of this `HList`.
  * 
@@ -1097,7 +1232,7 @@ object FilterAux {
     }
 
   implicit def hlistFilter2[H, L <: HList, U, Out <: HList]
-    (implicit aux : FilterAux[L, U, Out]) = new FilterAux[H :: L, U, Out] {
+    (implicit aux : FilterAux[L, U, Out], e : U =:!= H) = new FilterAux[H :: L, U, Out] {
        def apply(l : H :: L) : Out = aux(l.tail)
     }
 }
@@ -1124,8 +1259,6 @@ trait FilterNotAux[L <: HList, U, Out <: HList] {
 }
 
 object FilterNotAux {
-  import TypeOperators._
-
   implicit def hlistFilterNotHNil[L <: HList, U] = new FilterNotAux[HNil, U, HNil] {
      def apply(l : HNil) : HNil = HNil
   }

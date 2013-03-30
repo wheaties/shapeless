@@ -23,9 +23,16 @@ import scala.reflect.macros.{ Context, Macro }
 /**
  * Representation of an isomorphism between a type (typically a case class) and an `HList`.
  */
-trait Iso[T, U] {
+trait Iso[T, U] { self =>
   def to(t : T) : U
   def from(u : U) : T
+
+  def reverse : Iso[U, T] = new Iso[U, T] {
+    def to(u : U) : T = self.from(u)
+    def from(t : T) : U = self.to(t)
+
+    override def reverse = self
+  }
 }
 
 trait LowPriorityIso {

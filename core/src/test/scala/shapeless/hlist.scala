@@ -19,6 +19,8 @@ package shapeless
 import org.junit.Test
 import org.junit.Assert._
 
+import shapeless.test.ShouldNotTypecheck
+
 class HListTests {
   import HList._
   import Typeable._
@@ -89,8 +91,20 @@ class HListTests {
     
     typed[Double](l.tail.tail.head)
     assertEquals(2.0, l.tail.tail.head, Double.MinPositiveValue)
+    
+    ShouldNotTypecheck("""
+      HNil.head
+    """)
+    
+    ShouldNotTypecheck("""
+      HNil.head
+    """)
+    
+    ShouldNotTypecheck("""
+      l.tail.tail.tail.head
+    """)
   }
-  
+
   @Test
   def testMap {
     implicitly[MapperAux[choose.type, HNil, HNil]]
@@ -344,7 +358,20 @@ class HListTests {
     //val invar2 = Set(23) :: Set("foo") :: Set(true) :: HNil
     //val uinvar2 = invar.unify
   }
-    
+
+  @Test
+  def testSubtypeUnifier {
+    val fruits : Apple :: Pear :: Fruit :: HNil = a :: p :: f :: HNil
+    typed[Fruit :: Fruit :: Fruit :: HNil](fruits.unifySubtypes[Fruit])
+    typed[Apple :: Pear :: Fruit :: HNil](fruits.unifySubtypes[Apple])
+    assertEquals(a :: p :: f :: HNil, fruits.unifySubtypes[Fruit].filter[Fruit])
+
+    val stuff : Apple :: String :: Pear :: HNil = a :: "foo" :: p :: HNil
+    typed[Fruit :: String :: Fruit :: HNil](stuff.unifySubtypes[Fruit])
+    assertEquals(HNil, stuff.filter[Fruit])
+    assertEquals(a :: p :: HNil, stuff.unifySubtypes[Fruit].filter[Fruit])
+  }
+
   @Test
   def testToList {
     val fruits1 = apap.toList
@@ -1042,11 +1069,23 @@ class HListTests {
     implicitly[NatTRel[L2, List, L3, Option]]
 
     implicitly[NatTRel[L1, Id, L4, Const[Int]#λ]]
-    implicitly[NatTRel[L4, Const[Int]#λ, L1, Id]]
 
     implicitly[NatTRel[L2, List, L4, Const[Int]#λ]]
-    implicitly[NatTRel[L4, Const[Int]#λ, L2, List]]
-    
-    implicitly[NatTRel[L4, Const[Int]#λ, L5, Const[String]#λ]]
+  }
+
+  object optionToList extends (Option ~> List) {
+    def apply[A](fa: Option[A]): List[A] = List.fill(3)(fa.toList).flatten
+  }
+
+  @Test
+  def testNatTRelMap {
+    type L1 = Option[Int] :: Option[Boolean] :: Option[String] :: Option[Nothing] :: HNil
+    type L2 = List[Int] :: List[Boolean] :: List[String] :: List[Nothing] :: HNil
+    val nattrel = implicitly[NatTRel[L1, Option, L2, List]]
+
+    val l1: L1 = Option(1) :: Option(true) :: Option("three") :: None :: HNil
+    val l2 = nattrel.map(optionToList, l1)
+
+    assertEquals(l2, List(1, 1, 1) :: List(true, true, true) :: List("three", "three", "three") :: List() :: HNil)
   }
 }
