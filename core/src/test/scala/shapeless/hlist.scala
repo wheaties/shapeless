@@ -92,17 +92,17 @@ class HListTests {
     typed[Double](l.tail.tail.head)
     assertEquals(2.0, l.tail.tail.head, Double.MinPositiveValue)
     
-    ShouldNotTypecheck("""
+    ShouldNotTypecheck(
       HNil.head
-    """)
+    )
     
-    ShouldNotTypecheck("""
+    ShouldNotTypecheck(
       HNil.head
-    """)
+    )
     
-    ShouldNotTypecheck("""
+    ShouldNotTypecheck(
       l.tail.tail.tail.head
-    """)
+    )
   }
 
   @Test
