@@ -28,18 +28,15 @@ import scala.reflect.macros.{ Context, TypecheckException }
  * Credit: Travis Brown (@travisbrown)
  */
 object illTyped {
-  def apply(code: _): Unit = macro applyImplNoExp
-  def withExpectation(code: String, expected: String): Unit = macro applyImpl
-  
-  def applyImplNoExp(c: Context)(code: c.Tree) = applyImpl(c)(code, null)
+  def apply(codePat: _*): Unit = macro applyImpl
 
-  def applyImpl(c: Context)(code: c.Tree, expected: c.Expr[String]): c.Expr[Unit] = {
+  def applyImpl(c: Context)(codePat: c.Tree*): c.Expr[Unit] = {
     import c.universe._
     
-    val (expPat, expMsg) = expected match {
-      case null => (null, "Expected some error.")
-      case Expr(Literal(Constant(s: String))) =>
-        (Pattern.compile(s, Pattern.CASE_INSENSITIVE), "Expected error matching: "+s)
+    val (code, expPat, expMsg) = codePat match {
+      case code :: Nil => (code, null, "Expected some error.")
+      case code :: Literal(Constant(s: String)) :: Nil =>
+        (code, Pattern.compile(s, Pattern.CASE_INSENSITIVE), "Expected error matching: "+s)
     }
     
     try {
@@ -48,7 +45,7 @@ object illTyped {
     } catch {
       case e: TypecheckException =>
         val msg = e.getMessage
-        if((expected ne null) && !(expPat.matcher(msg)).matches)
+        if((expPat ne null) && !(expPat.matcher(msg)).matches)
           c.abort(c.enclosingPosition, "Type-checking failed in an unexpected way.\n"+expMsg+"\nActual error: "+msg)
     }
     
