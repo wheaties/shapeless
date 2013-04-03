@@ -23,7 +23,7 @@ import java.util.regex.Pattern
 import scala.reflect.macros.{ Context, TypecheckException }
 
 /**
- * A macro that ensures that a code snippet does not typecheck.
+ * A utility which ensures that a code fragment does not typecheck.
  * 
  * Credit: Travis Brown (@travisbrown)
  */
