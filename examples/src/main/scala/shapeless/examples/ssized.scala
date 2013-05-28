@@ -21,6 +21,22 @@ import shapeless._
 import scala.collection.{ GenTraversable, GenTraversableLike }
 import scala.collection.generic.CanBuildFrom
 
+trait IfTrue[T]
+
+object IfTrue {
+  import SingletonTypes._
+  
+  implicit def apply[E, R](implicit ev: E ^== R, ev2: R =:= ^(true)) = new IfTrue[E] {}
+}
+
+trait IfFalse[T]
+
+object IfFalse {
+  import SingletonTypes._
+  
+  implicit def apply[E, R](implicit ev: E ^== R, ev2: R =:= ^(false)) = new IfFalse[E] {}
+}
+
 /**
  * Wrapper for a collection type witnessing that it has the statically specified length. Can be
  * applied to any type which can be viewed as a `GenTraversableLike`, ie. standard collections,
@@ -48,45 +64,44 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
   import SingletonTypes._
   import SSized._
   import SNat._
-  import SLt._
   
   /**
    * Returns the head of this collection. Available only if there is evidence that this collection has at least one
    * element.
    */
-  def head(implicit ev : SLt[^(0), L, ^(true)]) : A = r.head
+  def head[R](implicit ev : IfTrue[L ^> ^(0)]) : A = r.head
   
   /**
    * Returns the tail of this collection. Available only if there is evidence that this collection has at least one
    * element.
    */
-  def tail[M](implicit pred : SDiff[L, ^(1), M]) = wrap[A, Repr, M](r.tail)
-  
+  def tail[M](implicit ev : (L ^- ^(1)) ^== M) = wrap[A, Repr, M](r.tail)
+
   /**
    * Returns the first ''m'' elements of this collection. Available only if there is evidence that this collection has
    * at least ''m'' elements. The resulting collection will be statically known to have ''m'' elements.
    */
-  def take[M, D](m : SNat[M])(implicit sdiff : SDiff[L, M, D]) = wrap[A, Repr, M](r.take(m.value))
+  def take[D](m : SNat)(implicit ev : (L ^- m.N) ^== D) = wrap[A, Repr, m.N](r.take(m.value))
 
   /**
    * Returns all but the  first ''m'' elements of this collection. Available only if there is evidence that this
    * collection has at least ''m'' elements. The resulting collection will be statically known to have ''m'' less
    * elements than this collection.
    */
-  def drop[M, D](m : SNat[M])(implicit sdiff : SDiff[L, M, D]) = wrap[A, Repr, D](r.drop(m.value))
+  def drop[D](m : SNat)(implicit ev : (L ^- m.N) ^== D) = wrap[A, Repr, D](r.drop(m.value))
   
   /**
    * Splits this collection at the ''mth'' element, returning the prefix and suffix as a pair. Available only if there
    * is evidence that this collection has at least ''m'' elements. The resulting collections will be statically know to
    * have ''m'' and ''n-m'' elements respectively.
    */
-  def splitAt[M, D](m : SNat[M])(implicit sdiff : SDiff[L, M, D]) = (take(m), drop(m))
+  def splitAt[D](m : SNat)(implicit ev : (L ^- m.N) ^== D) = (take(m), drop(m))
   
   /**
    * Prepend the argument element to this collection. The resulting collection will be statically known to have a size
    * one greater than this collection.
    */
-  def +:[S](elem : A)(implicit succ: SSum[L, ^(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
+  def +:[S](elem : A)(implicit ev: (L ^+ ^(1)) ^== S, cbf : CanBuildFrom[Repr, A, Repr]) = {
     val builder = cbf.apply(r)
     builder += elem
     builder ++= r.toIterator
@@ -97,7 +112,7 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
    * Append the argument element to this collection. The resulting collection will be statically known to have a size
    * one greater than this collection.
    */
-  def :+[S](elem : A)(implicit succ: SSum[L, ^(1), S], cbf : CanBuildFrom[Repr, A, Repr]) = {
+  def :+[S](elem : A)(implicit ev: (L ^+ ^(1)) ^== S, cbf : CanBuildFrom[Repr, A, Repr]) = {
     val builder = cbf.apply(r)
     builder ++= r.toIterator
     builder += elem
@@ -110,7 +125,7 @@ class SSizedOps[A, Repr <% GenTraversableLike[A, Repr], L](r : Repr) { outer =>
    */
   def ++[B >: A, That, M, S](that : SSized[That, M] { type A = B })
     (implicit
-      sum : SSum[L, M, S],
+      sum : (L ^+ M) ^== S,
       cbf : CanBuildFrom[Repr, B, That],
       convThat : That => GenTraversableLike[B, That]) = wrap[B, That, S](r ++ that.unsized)
     
@@ -134,12 +149,12 @@ object SSized extends LowPrioritySSized {
   def wrap[A0, Repr, L](r : Repr) = new SSized[Repr, L](r) { type A = A0 }
 
   class SSizedConv[A, Repr <% GenTraversableLike[A, Repr]](r : Repr) {
-    def sized[L](l: SNat[L]) =
-      if(r.size == l.value) Some(wrap[A, Repr, L](r)) else None
+    def sized(l: SNat) =
+      if(r.size == l.value) Some(wrap[A, Repr, l.N](r)) else None
       
-    def ensureSized[L](l: SNat[L]) = {
+    def ensureSized(l: SNat) = {
       assert(r.size == l.value)
-      wrap[A, Repr, L](r)
+      wrap[A, Repr, l.N](r)
     }
   }
   

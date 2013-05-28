@@ -20,10 +20,6 @@ import scala.language.experimental.macros
 
 import scala.reflect.macros.{ Context, Macro }
 
-class SNat[N](val value: Int) extends AnyVal {
-  override def toString = "SNat[Int("+value+")]("+value+")"
-}
-
 object SingletonTypes {
   type ^[T](t: T) = macro SingletonTypeMacros.singletonType[T]
 
@@ -55,193 +51,156 @@ trait SingletonTypeMacros extends Macro {
   }
 }
 
-object SNat {
-  implicit def apply[N](i: Int) : SNat[N] = macro SNatMacros.toSNat
+class SNat(val value: Int) {
+  type N
+  override def toString = s"SNat($value) { type N = Int($value) }"
+}
 
-  implicit def natToInt[N](snat: SNat[N]): Int = snat.value
+object SNat {
+  implicit def apply(i: Int) = macro SNatMacros.toSNat
+
+  implicit def natToInt(snat: SNat): Int = snat.value
 }
 
 trait SNatMacros extends Macro with SingletonTypeMacros {
   import c.universe._
 
-  def toSNat(i: c.Expr[Int]) = {
+  def toSNat(i: c.Expr[Int]): c.Expr[SNat] = {
     val n = eval[Int](i.tree)
-    val N = TypeTree(ConstantType(Constant(n)))
-    c.Expr(q"new SNat[$N]($n)")
+    if (n < 0)
+      c.abort(c.enclosingPosition, s"A SNat cannot represent $n")
+    val N0 = TypeTree(ConstantType(Constant(n)))
+    c.Expr(q"new SNat($n) { type N = $N0 }")
   }
+}
 
-  override def onInfer(tic: c.TypeInferenceContext): Unit = {
-    val N = tic.unknowns(0)
+trait SNatOpMacros extends Macro {
+  import c.universe._
 
-    tic.tree match {
-      case Apply(_, List(arg)) =>
-        val n = eval[Int](arg)
-        tic.infer(N, ConstantType(Constant(n)))
-
-      case _ =>
+  class WitnessAux[E] {
+    def apply[R](op: (Int, Int) => R, validate: R => Boolean = (_: R) => true)(implicit foo : c.WeakTypeTag[E]): c.Expr[E] = {
+      val expr = weakTypeOf[E]
+      val res: c.Type = expr.normalize match {
+        case TypeRef(_, _, List(ConstantType(Constant(a: Int)), ConstantType(Constant(b: Int)))) =>
+          val r = op(a, b)
+          if (!validate(r))
+            c.abort(c.enclosingPosition, s"The result of a SNatOp cannot represent $r")
+          ConstantType(Constant(r))
+      }
+      c.Expr(q"new $expr { type Result = $res }")
     }
   }
+  
+  def witness[E] = new WitnessAux[E]
+  
+  def plus[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^+ B](_ + _)
+  def minus[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^- B](_ - _, (_: Int) >= 0)
+  def times[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^* B](_ * _)
+  def div[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^/ B](_ / _)
+  def mod[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^% B](_ % _)
+
+  def lt[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^< B](_ < _)
+  def lteq[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^<= B](_ <= _)
+  def gt[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^> B](_ > _)
+  def gteq[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A ^>= B](_ >= _)
+  def max[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A Max B](_ max _)
+  def min[A : c.WeakTypeTag, B : c.WeakTypeTag] = witness[A Min B](_ min _)
 }
 
-trait SSum[A, B, C]
-
-object SSum {
-  implicit def mkSsum[A, B, C] = macro SSumMacros.witness[A, B, C]
-
-  def ssum[A, B, C](a: SNat[A], b: SNat[B])(implicit ssum: SSum[A, B, C]) = ssum
+trait SNatExpr {
+  type Result
 }
 
-trait SSumMacros extends Macro with SBinOpMacros {
-  import c.universe._
+trait ^+[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int = _ + _
+object ^+ {
+  implicit def apply[A, B] = macro SNatOpMacros.plus[A, B]
 
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SSum[A, B, C] {})
+  def apply(a: SNat, b: SNat)(implicit plus: a.N ^+ b.N): (a.N ^+ b.N) { type Result = plus.Result } = plus
 }
 
-trait SDiff[A, B, C]
+trait ^-[A, B] extends SNatExpr
 
-object SDiff {
-  implicit def mkSDiff[A, B, C] = macro SDiffMacros.witness[A, B, C]
+object ^- {
+  implicit def apply[A, B] = macro SNatOpMacros.minus[A, B]
 
-  def sdiff[A, B, C](a: SNat[A], b: SNat[B])(implicit sdiff: SDiff[A, B, C]) = sdiff
+  def apply(a: SNat, b: SNat)(implicit minus: a.N ^- b.N): (a.N ^- b.N) { type Result = minus.Result } = minus
 }
 
-trait SDiffMacros extends Macro with SBinOpMacros {
-  import c.universe._
+trait ^*[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int = _ - _
+object ^* {
+  implicit def apply[A, B] = macro SNatOpMacros.times[A, B]
 
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SDiff[A, B, C] {})
+  def apply(a: SNat, b: SNat)(implicit times: a.N ^* b.N): (a.N ^* b.N) { type Result = times.Result } = times
 }
 
-trait SProd[A, B, C]
+trait ^/[A, B] extends SNatExpr
 
-object SProd {
-  implicit def mkSProd[A, B, C] = macro SProdMacros.witness[A, B, C]
+object ^/ {
+  implicit def apply[A, B] = macro SNatOpMacros.div[A, B]
 
-  def sprod[A, B, C](a: SNat[A], b: SNat[B])(implicit sprod: SProd[A, B, C]) = sprod
+  def apply(a: SNat, b: SNat)(implicit div: a.N ^/ b.N): (a.N ^/ b.N) { type Result = div.Result } = div
 }
 
-trait SProdMacros extends Macro with SBinOpMacros {
-  import c.universe._
+trait ^%[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int = _ * _
+object ^% {
+  implicit def apply[A, B] = macro SNatOpMacros.mod[A, B]
 
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SProd[A, B, C] {})
+  def apply(a: SNat, b: SNat)(implicit mod: a.N ^% b.N): (a.N ^% b.N) { type Result = mod.Result } = mod
 }
 
-trait SDiv[A, B, C]
+trait ^<[A, B] extends SNatExpr
 
-object SDiv {
-  implicit def mkSDiv[A, B, C] = macro SDivMacros.witness[A, B, C]
+object ^< {
+  implicit def apply[A, B] = macro SNatOpMacros.lt[A, B]
 
-  def sdiv[A, B, C](a: SNat[A], b: SNat[B])(implicit sdiv: SDiv[A, B, C]) = sdiv
+  def apply(a: SNat, b: SNat)(implicit lt: a.N ^< b.N): (a.N ^< b.N) { type Result = lt.Result } = lt
 }
 
-trait SDivMacros extends Macro with SBinOpMacros {
-  import c.universe._
+trait ^<=[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int = _ / _
+object ^<= {
+  implicit def apply[A, B] = macro SNatOpMacros.lteq[A, B]
 
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SDiv[A, B, C] {})
+  def apply(a: SNat, b: SNat)(implicit lteq: a.N ^<= b.N): (a.N ^<= b.N) { type Result = lteq.Result } = lteq
 }
 
-trait SMod[A, B, C]
+trait ^>[A, B] extends SNatExpr
 
-object SMod {
-  implicit def mkSMod[A, B, C] = macro SModMacros.witness[A, B, C]
+object ^> {
+  implicit def apply[A, B] = macro SNatOpMacros.gt[A, B]
 
-  def smod[A, B, C](a: SNat[A], b: SNat[B])(implicit smod: SMod[A, B, C]) = smod
+  def apply(a: SNat, b: SNat)(implicit gt: a.N ^> b.N): (a.N ^> b.N) { type Result = gt.Result } = gt
 }
 
-trait SModMacros extends Macro with SBinOpMacros {
-  import c.universe._
+trait ^>=[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int = _ % _
+object ^>= {
+  implicit def apply[A, B] = macro SNatOpMacros.gteq[A, B]
 
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SMod[A, B, C] {})
+  def apply(a: SNat, b: SNat)(implicit gteq: a.N ^>= b.N): (a.N ^>= b.N) { type Result = gteq.Result } = gteq
 }
 
-trait SBinOpMacros { self: Macro =>
-  import c.universe._
+trait Max[A, B] extends SNatExpr
 
-  val op: (Int, Int) => Int
+object Max {
+  implicit def apply[A, B] = macro SNatOpMacros.max[A, B]
 
-  override def onInfer(tic: c.TypeInferenceContext): Unit = {
-    val A = tic.unknowns(0)
-    val B = tic.unknowns(1)
-    val C = tic.unknowns(2)
-
-    tic.expectedType match {
-      case TypeRef(_, _,
-        List(aTpe @ ConstantType(Constant(a: Int)), bTpe @ ConstantType(Constant(b: Int)), _)) if(op(a, b) >= 0) => 
-        tic.infer(A, aTpe)
-        tic.infer(B, bTpe)
-        tic.infer(C, ConstantType(Constant(op(a, b))))
-
-      case _ =>
-    }
-  }
+  def apply(a: SNat, b: SNat)(implicit max: a.N Max b.N): (a.N Max b.N) { type Result = max.Result } = max
 }
 
-trait SLt[A, B, C]
+trait Min[A, B] extends SNatExpr
 
-object SLt {
-  implicit def mkLt[A, B, C] = macro SLtMacros.witness[A, B, C]
+object Min {
+  implicit def apply[A, B] = macro SNatOpMacros.min[A, B]
 
-  def slt[A, B, C](a: SNat[A], b: SNat[B])(implicit slt: SLt[A, B, C]) = slt
+  def apply(a: SNat, b: SNat)(implicit min: a.N Min b.N): (a.N Min b.N) { type Result = min.Result } = min
 }
 
-trait SLtMacros extends Macro with SRelOpMacros {
-  import c.universe._
+trait ^==[E, R]
 
-  val op: (Int, Int) => Boolean = _ < _
-
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SLt[A, B, C] {})
-}
-
-trait SLtEq[A, B, C]
-
-object SLtEq {
-  implicit def mkLtEq[A, B, C] = macro SLtEqMacros.witness[A, B, C]
-
-  def slteq[A, B, C](a: SNat[A], b: SNat[B])(implicit slteq: SLtEq[A, B, C]) = slteq
-}
-
-trait SLtEqMacros extends Macro with SRelOpMacros {
-  import c.universe._
-
-  val op: (Int, Int) => Boolean = _ <= _
-
-  def witness[A : c.WeakTypeTag, B : c.WeakTypeTag, C : c.WeakTypeTag] =
-    reify(new SLtEq[A, B, C] {})
-}
-
-trait SRelOpMacros { self: Macro =>
-  import c.universe._
-
-  val op: (Int, Int) => Boolean
-
-  override def onInfer(tic: c.TypeInferenceContext): Unit = {
-    val A = tic.unknowns(0)
-    val B = tic.unknowns(1)
-    val C = tic.unknowns(2)
-
-    tic.expectedType match {
-      case TypeRef(_, _,
-        List(aTpe @ ConstantType(Constant(a: Int)), bTpe @ ConstantType(Constant(b: Int)), _)) => 
-        tic.infer(A, aTpe)
-        tic.infer(B, bTpe)
-        tic.infer(C, ConstantType(Constant(op(a, b))))
-
-      case _ =>
-    }
-  }
+object ^== {
+  implicit def apply[E <: SNatExpr](implicit expr: E): E ^== expr.Result = new (E ^== expr.Result) {}
 }

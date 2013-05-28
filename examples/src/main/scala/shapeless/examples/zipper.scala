@@ -98,7 +98,7 @@ object ZipperExamples extends App {
   typed[D](updatedDept)
   println(updatedDept)
   // Dept(Employee(King Agamemnon,8000),Employee(Menelaus,3000) :: Employee(Achilles,2000) :: Employee(Odysseus,2000) :: HNil)
-  
+
   val achillesRaise = g9.right.down.right.down.right.put(3000).root.reify
   typed[D](achillesRaise)
   println(achillesRaise)

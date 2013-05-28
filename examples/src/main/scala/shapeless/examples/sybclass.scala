@@ -30,7 +30,6 @@ object SybClassExamples extends App {
   // "Scrap your boilerplate: a practical approach to generic programming", Ralf Laemmel, Simon Peyton Jones
   //   http://research.microsoft.com/en-us/um/people/simonpj/papers/hmap/
   case class Company[D <: HList](depts : D)
-
   case class Dept[S <: HList](name : Name, manager : Manager, subunits : S)
   case class Employee(person : Person, salary : Salary)
   case class Person(name : Name, address : Address)
