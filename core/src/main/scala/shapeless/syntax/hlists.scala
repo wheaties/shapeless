@@ -426,6 +426,11 @@ final class HListOps[L <: HList](l : L) {
    * Compute the length of this `HList`.
    */
   def length(implicit length : Length[L]) : length.Out = length()
+
+  /**
+   * Counts the number of times an element of type `U` appears in the `HList`.
+   */ 
+  def count[U](implicit counter: Count[L, U]): counter.N = counter(l)
   
   /**
    * Compute the length of this `HList` as a runtime Int value.

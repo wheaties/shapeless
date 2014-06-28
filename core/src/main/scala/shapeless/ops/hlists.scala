@@ -1674,4 +1674,38 @@ object hlist {
           def apply(l: LH :: LT): Out = collect(l.tail)
         }
   }
+
+  /**
+   * Type Class witnessing that there that `N` instances of type `U` within an `HList`.
+   *
+   * @author Owein Reese 
+   */
+  trait Count[L <: HList, U]{
+    type N <: Nat
+    def apply(l: L): N
+  }
+
+  object Count{
+    def apply[L <: HList, U](implicit counter: Count[L, U]) = counter
+
+    type Aux[L <: HList, U, N0 <: Nat] = Count[L, U]{ type N = N0 }
+
+    implicit def hnilCount[U] =
+      new Count[HNil, U]{
+        type N = _0
+        def apply(l: HNil) = Nat._0
+      }
+
+    implicit def hlistCount1[T <: HList, U](implicit counter: Count[T, U]): Aux[U :: T, U, Succ[counter.N]] =
+      new Count[U :: T, U]{
+        type N = Succ[counter.N]
+        def apply(l: U :: T) = new Succ[counter.N]
+      }
+
+    implicit def hlistCount2[H, T <: HList, U](implicit counter: Count[T, U], ev: U =:!= H): Aux[H :: T, U, counter.N] =
+      new Count[H :: T, U]{
+        type N = counter.N
+        def apply(l: H :: T) = counter(l.tail)
+      }
+  }
 }

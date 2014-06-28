@@ -1712,4 +1712,24 @@ class HListTests {
       assertEquals(1.0 :: 1 :: HNil, result)
     }
   }
+
+  @Test
+  def count{
+    { // HNil count
+      val in: HNil = HNil
+      assertEquals(in.count[Int], Nat._0)
+      assertEquals(in.count[Nothing], Nat._0)
+    }
+
+    { // HList contains none of type
+      val in = 1 :: "two" :: HNil
+      assertEquals(in.count[Double], Nat._0)
+    }
+
+    { // HNlist contains
+      val in = 1 :: 2 :: "three" :: HNil
+      sameTyped(in.count[String])(Nat._1)
+      sameTyped(in.count[Int])(Nat._2)
+    }
+  }
 }
