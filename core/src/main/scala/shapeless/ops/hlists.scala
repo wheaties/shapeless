@@ -1696,16 +1696,18 @@ object hlist {
         def apply(l: HNil) = Nat._0
       }
 
-    implicit def hlistCount1[T <: HList, U](implicit counter: Count[T, U]): Aux[U :: T, U, Succ[counter.N]] =
-      new Count[U :: T, U]{
-        type N = Succ[counter.N]
-        def apply(l: U :: T) = new Succ[counter.N]
-      }
+    implicit def hlistCount1[T <: HList, U, N0 <: Nat]
+      (implicit counter: Aux[T, U, N0], sn: Witness.Aux[Succ[N0]]): Aux[U :: T, U, Succ[N0]] =
+        new Count[U :: T, U]{
+          type N = Succ[N0]
+          def apply(l: U :: T) = sn.value
+        }
 
-    implicit def hlistCount2[H, T <: HList, U](implicit counter: Count[T, U], ev: U =:!= H): Aux[H :: T, U, counter.N] =
-      new Count[H :: T, U]{
-        type N = counter.N
-        def apply(l: H :: T) = counter(l.tail)
-      }
+    implicit def hlistCount2[H, T <: HList, U, N0 <: Nat]
+      (implicit counter: Aux[T, U, N0], ev: U =:!= H): Aux[H :: T, U, N0] =
+        new Count[H :: T, U]{
+          type N = N0
+          def apply(l: H :: T) = counter(l.tail)
+        }
   }
 }
