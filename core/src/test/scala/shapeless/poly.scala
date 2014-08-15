@@ -527,6 +527,41 @@ class PolyTests {
 
     assertTypedEquals[String]("i: 1, s: foo, d: 2.0, c: a", dcis(2.0, 'a', 1, "foo"))
   }
+
+  object one extends Poly3{
+    implicit val iii = at[Int, Int, Int]{ 
+      case (x, y, z) => x+y+z
+    }
+    implicit val iid = at[Int, Int, Double]{
+      case (x, y, z) => 1.0
+    }
+  }
+  object two extends Poly3{
+    implicit val iid = at[Int, Int, Double]{
+      case (x, y, z) => 2.0
+    }
+    implicit val idd = at[Int, Double, Double]{
+      case (x, y, z) => 2.0
+    }
+  }
+
+  @Test
+  def testOrElse{
+    { //Test with similar arity
+      val gen = one orElse two
+
+      assertTypedEquals[Int](gen(1, 1, 1), 3)
+      assertTypedEquals[Double](gen(1, 1, 1.0), 1.0)
+      assertTypedEquals[Double](gen(1, 1.0, 1.0), 2.0)
+    }
+
+    { //Test with different arity
+      val gen = bidi orElse one
+
+      assertTypedEquals[Int](gen("1"), 1)
+      assertTypedEquals[Int](gen(1, 1, 1), 3)
+    }
+  }
 }
 
 object LiftMethods {

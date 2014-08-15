@@ -80,6 +80,24 @@ object PolyDefns extends Cases {
     }
   }
 
+  class OrElse[F, G](f: F, g: G) extends Poly
+
+  object OrElse extends LowPriorityOrElseImplicits {
+    implicit def orElseCase[C, F <: Poly, G, L <: HList](implicit unpack: Unpack2[C, OrElse, F, G], ev: Case[F, L]): Case.Aux[C, L, ev.Result] = 
+      new Case[C, L]{
+        type Result = ev.Result
+        val value = ev.value
+      }
+  }
+
+  trait LowPriorityOrElseImplicits {
+    implicit def orElseCase2[C, F, G <: Poly, L <: HList](implicit unpack: Unpack2[C, OrElse, F, G], ev: Case[G, L]): Case.Aux[C, L, ev.Result] = 
+      new Case[C, L]{
+        type Result = ev.Result
+        val value = ev.value
+      }
+  }
+
   /**
    * Represents rotating a polymorphic function by N places to the left
    *
@@ -195,6 +213,8 @@ trait Poly extends PolyApply {
   def rotateLeft[N <: Nat] = new RotateLeft[this.type, N](this)
 
   def rotateRight[N <: Nat] = new RotateRight[this.type, N](this)
+
+  def orElse(f: Poly) = new OrElse[this.type, f.type](this, f)
 
   /** The type of the case representing this polymorphic function at argument types `L`. */
   type ProductCase[L <: HList] = Case[this.type, L]
