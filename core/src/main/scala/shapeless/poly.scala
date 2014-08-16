@@ -114,6 +114,44 @@ object PolyDefns extends Cases {
       }
   }
 
+  class Curried[P, N, L](p: P, args: L) extends Poly1{
+    implicit def next[H](implicit gen: (P, L) => Case1[this.type, H]): Case1[this.type, H] = gen(p, args)
+  }
+
+  object Curried{
+    implicit def curryCase[C, P <: Poly, N <: Nat, L <: HList, H, T <: HList, PL <: HList, OutL <: HList]
+      (implicit unpack: Unpack3[C, Curried, P, N, L], 
+                pre: hl.Prepend.Aux[L, H :: T, PL], 
+                prepend: hl.Prepend.Aux[L, H :: HNil, OutL],
+                ev: Case[P, PL], 
+                length: hl.Length.Aux[PL, N]): (P, L) => Case1.Aux[C, H, Curried[P, N, OutL]] =
+        (p: P, l: L) => new Case1[C, H]{
+          type Result = Curried[P, N, OutL]
+          val value = (h: H :: HNil) => new Curried[P, N, OutL](p, prepend(l, h))
+        }
+
+    implicit def evalCase[C, P <: Poly, N <: Nat, L <: HList, H, PL <: HList]
+      (implicit unpack: Unpack3[C, Curried, P, N, L],
+                prepend: hl.Prepend.Aux[L, H :: HNil, PL], 
+                ev: Case[P, PL], 
+                length: hl.Length.Aux[PL, N]): (P, L) => Case1.Aux[C, H, ev.Result] = 
+        (p: P, l: L) => new Case1[C, H]{
+          type Result = ev.Result
+          val value = (h: H :: HNil) => ev(prepend(l, h))
+        }
+  }
+
+  trait CurriedBuilder[P <: Poly, N <: Nat] extends (P => Curried[P, N, HNil])
+
+  object CurriedBuilder{
+    def apply[P <: Poly, N <: Nat](implicit builder: CurriedBuilder[P, N]) = builder
+
+    implicit def curBuilder[P <: Poly, N <: Nat, L <: HList](implicit ev: Case[P, L], length: hl.Length.Aux[L, N]) = 
+      new CurriedBuilder[P, N]{
+        def apply(p: P) = new Curried[P, N, HNil](p, HNil)
+      }
+  }
+
   /**
    * Base class for lifting a `Function1` to a `Poly1`
    */
@@ -195,6 +233,8 @@ trait Poly extends PolyApply {
   def rotateLeft[N <: Nat] = new RotateLeft[this.type, N](this)
 
   def rotateRight[N <: Nat] = new RotateRight[this.type, N](this)
+
+  def curried[N <: Nat](implicit builder: CurriedBuilder[this.type, N]) = builder(this)
 
   /** The type of the case representing this polymorphic function at argument types `L`. */
   type ProductCase[L <: HList] = Case[this.type, L]
